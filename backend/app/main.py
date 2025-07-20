@@ -1,9 +1,10 @@
 from fastapi import FastAPI
-from app.routes import reports
+from app.routes import reports, auth
 from app.services.supabase_client import supabase
 
 app = FastAPI()
 app.include_router(reports.router)
+app.include_router(auth.router)
 
 @app.get("/health")
 def health_check():
