@@ -17,28 +17,25 @@ CREATE TABLE IF NOT EXISTS reports (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- 2. Criar tabela de templates
+-- Tabela de templates de relatórios
 CREATE TABLE IF NOT EXISTS templates (
     id SERIAL PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
+    user_id UUID NOT NULL REFERENCES auth.users(id),
+    name TEXT NOT NULL,
     description TEXT,
-    config JSONB,
-    is_public BOOLEAN DEFAULT FALSE,
-    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    content TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc', now()),
+    updated_at TIMESTAMP WITH TIME ZONE
 );
 
--- 3. Criar tabela de configurações do usuário
+-- Tabela de configurações de usuário
 CREATE TABLE IF NOT EXISTS user_settings (
     id SERIAL PRIMARY KEY,
-    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE UNIQUE,
-    theme VARCHAR(20) DEFAULT 'light',
-    language VARCHAR(10) DEFAULT 'pt-BR',
-    max_file_size INTEGER DEFAULT 5242880, -- 5MB
-    allowed_file_types TEXT[] DEFAULT ARRAY['csv', 'xlsx', 'xls'],
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    user_id UUID NOT NULL REFERENCES auth.users(id) UNIQUE,
+    notifications_enabled BOOLEAN DEFAULT TRUE,
+    theme TEXT DEFAULT 'light',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc', now()),
+    updated_at TIMESTAMP WITH TIME ZONE
 );
 
 -- 4. Ativar Row Level Security (RLS)
@@ -65,6 +62,24 @@ CREATE INDEX IF NOT EXISTS idx_reports_user_id ON reports(user_id);
 CREATE INDEX IF NOT EXISTS idx_reports_created_at ON reports(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_templates_user_id ON templates(user_id);
 CREATE INDEX IF NOT EXISTS idx_templates_public ON templates(is_public) WHERE is_public = TRUE;
+
+-- Índice para busca rápida por usuário
+CREATE INDEX IF NOT EXISTS idx_templates_user_id ON templates(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_settings_user_id ON user_settings(user_id);
+
+-- Habilitar RLS
+ALTER TABLE templates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_settings ENABLE ROW LEVEL SECURITY;
+
+-- Política: cada usuário só vê seus próprios templates
+CREATE POLICY "Templates: Usuário só vê seus próprios templates" ON templates
+    FOR ALL
+    USING (user_id = auth.uid());
+
+-- Política: cada usuário só vê e edita suas próprias configurações
+CREATE POLICY "UserSettings: Usuário só vê/edita suas próprias configs" ON user_settings
+    FOR ALL
+    USING (user_id = auth.uid());
 
 -- 7. Função para atualizar updated_at automaticamente
 CREATE OR REPLACE FUNCTION update_updated_at_column()
