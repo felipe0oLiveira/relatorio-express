@@ -21,7 +21,7 @@ async function testAuth() {
     try {
         // 1. Tentar fazer login com credenciais de teste
         const { data, error } = await supabase.auth.signInWithPassword({
-            email: 'test@example.com',
+            email: 'test@autoreport.com',
             password: 'password123'
         });
         
@@ -39,7 +39,7 @@ async function testAuth() {
         if (data.session) {
             const token = data.session.access_token;
             console.log('✅ Login realizado com sucesso!');
-            console.log('🔑 Token obtido:', token.substring(0, 50) + '...');
+            console.log('🔑 Token obtido:', token);
             console.log('👤 User ID:', data.user.id);
             
             // Testar o token no nosso backend
