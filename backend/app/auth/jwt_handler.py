@@ -23,6 +23,13 @@ class SupabaseJWTValidator:
         Em produção, implemente validação completa com JWKS.
         """
         try:
+            # Limpar o token de possíveis espaços ou caracteres extras
+            token = token.strip()
+            
+            # Remover "Bearer " se presente
+            if token.startswith("Bearer "):
+                token = token[7:]
+            
             # Para teste, vamos apenas decodificar sem verificar assinatura
             # Em produção, você deve validar com as chaves públicas do Supabase
             payload = jwt.decode(
