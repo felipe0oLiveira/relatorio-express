@@ -2,6 +2,9 @@ fastapi
 uvicorn
 pydantic
 python-dotenv
-supabase-py
+supabase
 pandas
-slowapi 
+slowapi
+cryptography
+python-multipart
+openpyxl 
