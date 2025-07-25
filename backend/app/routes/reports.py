@@ -2,28 +2,104 @@ import pandas as pd
 from io import BytesIO
 from fastapi import APIRouter, HTTPException, UploadFile, File, Query, Request, Depends, Form
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.responses import StreamingResponse
 from app.security import bearer_scheme
 from app.models import Report, ReportCreate
 from app.services.supabase_client import supabase
 from app.dependencies.auth import CurrentUser
-from typing import List, Optional
+from typing import List, Optional, Dict
 from datetime import datetime
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from slowapi import Limiter
 from app.limiter import limiter, UPLOAD_LIMIT, REPORT_GENERATION_LIMIT, GENERAL_LIMIT, AUTH_LIMIT
 from app.utils.crypto_utils import encrypt_file_bytes, decrypt_file_bytes, encrypt_data, decrypt_data
+import numpy as np
 
 router = APIRouter()
 
 MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
 
+@router.get("/test-auth")
+def test_auth():
+    """Endpoint de teste para verificar se o servidor está funcionando"""
+    return {"message": "Servidor funcionando!", "status": "ok"}
+
+@router.get("/test-token")
+def test_token(token: str = Query(..., description="Token para teste")):
+    """Endpoint de teste para verificar se o token está funcionando"""
+    try:
+        import jwt
+        # Decodificar sem verificar assinatura
+        payload = jwt.decode(token.strip(), options={"verify_signature": False})
+        return {
+            "message": "Token válido!",
+            "user_id": payload.get('sub'),
+            "email": payload.get('email'),
+            "exp": payload.get('exp')
+        }
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Token inválido: {str(e)}")
+
+@router.post("/analyze-columns-simple")
+async def analyze_columns_simple(
+    file: UploadFile = File(...)
+):
+    """Lista as colunas disponíveis no arquivo (sem autenticação)"""
+    import pandas as pd
+    from io import BytesIO
+    
+    content = await file.read()
+    try:
+        if file.filename.endswith('.csv'):
+            df = pd.read_csv(BytesIO(content))
+        elif file.filename.endswith('.xlsx'):
+            df = pd.read_excel(BytesIO(content))
+        else:
+            raise HTTPException(status_code=400, detail="Formato de arquivo não suportado")
+        
+        return {
+            "columns": df.columns.tolist(),
+            "sample_data": df.head(3).to_dict(orient="records"),
+            "total_rows": len(df)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Erro ao analisar colunas: {str(e)}")
+
+@router.post("/reports/analyze/columns")
+async def analyze_columns(
+    file: UploadFile = File(...),
+    token: str = Query(None, description="Token JWT para autenticação"),
+    current_user: str = CurrentUser
+):
+    """Lista as colunas disponíveis no arquivo"""
+    import pandas as pd
+    from io import BytesIO
+    
+    content = await file.read()
+    try:
+        if file.filename.endswith('.csv'):
+            df = pd.read_csv(BytesIO(content))
+        elif file.filename.endswith('.xlsx'):
+            df = pd.read_excel(BytesIO(content))
+        else:
+            raise HTTPException(status_code=400, detail="Formato de arquivo não suportado")
+        
+        return {
+            "columns": df.columns.tolist(),
+            "sample_data": df.head(3).to_dict(orient="records")
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Erro ao analisar colunas: {str(e)}")
+
 @router.get("/reports", response_model=List[Report])
 def list_reports(current_user: str = CurrentUser):
     try:
+        print(f"🔍 Usuário autenticado: {current_user}")
         response = supabase.table("reports").select("*").order("created_at", desc=True).execute()
         return response.data
     except Exception as e:
+        print(f"❌ Erro ao buscar relatórios: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/reports/{report_id}", response_model=Report)
@@ -169,6 +245,128 @@ async def analyze_custom_report_file(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Erro ao analisar arquivo: {str(e)}")
 
+@router.post("/reports/analyze/trend")
+async def analyze_trend(
+    file: UploadFile = File(...),
+    date_col: str = Form(...),
+    value_col: str = Form(...),
+    freq: str = Form("M"),  # Mês por padrão
+    current_user: str = CurrentUser
+):
+    """
+    Analisa tendências e sazonalidade de uma métrica ao longo do tempo.
+    """
+    import pandas as pd
+    from io import BytesIO
+    content = await file.read()
+    try:
+        if file.filename.endswith('.csv'):
+            df = pd.read_csv(BytesIO(content))
+        elif file.filename.endswith('.xlsx'):
+            df = pd.read_excel(BytesIO(content))
+        else:
+            raise HTTPException(status_code=400, detail="Formato de arquivo não suportado")
+        df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
+        df = df.dropna(subset=[date_col, value_col])
+        df = df.sort_values(date_col)
+        ts = df.groupby(df[date_col].dt.to_period(freq))[value_col].sum()
+        trend = ts.rolling(window=3, min_periods=1).mean().tolist()
+        return {
+            "periods": ts.index.astype(str).tolist(),
+            "values": ts.tolist(),
+            "trend": trend
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Erro ao analisar tendência: {str(e)}")
+
+@router.post("/reports/analyze/risk-score")
+async def analyze_risk_score(
+    file: UploadFile = File(...),
+    score_cols: str = Form(...),  # Ex: "idade,renda,dividas"
+    weights: str = Form(None),    # Ex: "0.3,0.5,0.2"
+    current_user: str = CurrentUser
+):
+    """
+    Calcula score de risco/probabilidade baseado em variáveis do Excel.
+    """
+    import pandas as pd
+    from io import BytesIO
+    content = await file.read()
+    try:
+        if file.filename.endswith('.csv'):
+            df = pd.read_csv(BytesIO(content))
+        elif file.filename.endswith('.xlsx'):
+            df = pd.read_excel(BytesIO(content))
+        else:
+            raise HTTPException(status_code=400, detail="Formato de arquivo não suportado")
+        cols = [c.strip() for c in score_cols.split(",")]
+        if weights:
+            w = [float(x) for x in weights.split(",")]
+            if len(w) != len(cols):
+                raise HTTPException(status_code=400, detail="Número de pesos diferente do número de colunas")
+        else:
+            w = [1.0/len(cols)]*len(cols)
+        df = df.dropna(subset=cols)
+        # Normalizar colunas
+        for i, c in enumerate(cols):
+            col_min = df[c].min()
+            col_max = df[c].max()
+            if col_max > col_min:
+                df[c] = (df[c] - col_min) / (col_max - col_min)
+            else:
+                df[c] = 0.0
+        df["risk_score"] = np.dot(df[cols], w)
+        return {
+            "scores": df["risk_score"].round(3).tolist(),
+            "summary": {
+                "min": float(df["risk_score"].min()),
+                "max": float(df["risk_score"].max()),
+                "mean": float(df["risk_score"].mean()),
+                "std": float(df["risk_score"].std())
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Erro ao calcular score de risco: {str(e)}")
+
+@router.post("/reports/analyze/geography")
+async def analyze_geography(
+    file: UploadFile = File(...),
+    geo_col: str = Form(...),
+    value_col: str = Form(None),
+    agg: str = Form("count"),  # count, sum, mean
+    token: str = Query(None, description="Token JWT para autenticação"),
+    current_user: str = CurrentUser
+):
+    """
+    Agrupa e sumariza dados por região, estado ou cidade.
+    """
+    import pandas as pd
+    from io import BytesIO
+    content = await file.read()
+    try:
+        if file.filename.endswith('.csv'):
+            df = pd.read_csv(BytesIO(content))
+        elif file.filename.endswith('.xlsx'):
+            df = pd.read_excel(BytesIO(content))
+        else:
+            raise HTTPException(status_code=400, detail="Formato de arquivo não suportado")
+        if geo_col not in df.columns:
+            raise HTTPException(status_code=400, detail="Coluna geográfica não encontrada")
+        if agg == "count":
+            result = df[geo_col].value_counts().to_dict()
+        elif agg in ("sum", "mean") and value_col:
+            if value_col not in df.columns:
+                raise HTTPException(status_code=400, detail="Coluna de valor não encontrada")
+            if agg == "sum":
+                result = df.groupby(geo_col)[value_col].sum().to_dict()
+            else:
+                result = df.groupby(geo_col)[value_col].mean().to_dict()
+        else:
+            raise HTTPException(status_code=400, detail="Agregação não suportada ou coluna de valor ausente")
+        return {"geo_summary": result}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Erro ao analisar geografia: {str(e)}")
+
 @router.get("/reports/dashboard/summary")
 async def dashboard_summary(current_user: str = CurrentUser):
     try:
@@ -302,4 +500,247 @@ async def dashboard_outliers(
     lower = q1 - 1.5 * iqr
     upper = q3 + 1.5 * iqr
     outliers = df[(df[col] < lower) | (df[col] > upper)][col].tolist()
-    return {"column": col, "outliers": outliers, "lower": lower, "upper": upper} 
+    return {"column": col, "outliers": outliers, "lower": lower, "upper": upper}
+
+@router.post("/reports/generate-excel")
+@limiter.limit("10/minute")
+async def generate_excel_report(
+    file: UploadFile = File(...),
+    report_type: str = Form(..., description="Tipo de relatório: 'summary', 'geography', 'trend', 'risk', 'custom'"),
+    title: str = Form("Relatório Automático", description="Título do relatório"),
+    include_charts: bool = Form(True, description="Incluir gráficos no Excel"),
+    include_summary: bool = Form(True, description="Incluir resumo executivo"),
+    custom_analysis: Optional[str] = Form(None, description="Análise customizada (para report_type='custom')"),
+    value_column: Optional[str] = Form(None, description="Coluna de valores para análises"),
+    region_column: Optional[str] = Form(None, description="Coluna de região para análise geográfica"),
+    date_column: Optional[str] = Form(None, description="Coluna de data para análise temporal"),
+    current_user: str = CurrentUser,
+    request: Request = None
+):
+    """
+    Gera relatório em Excel automaticamente com base nos dados fornecidos
+    """
+    try:
+        # Ler o arquivo
+        content = await file.read()
+        if file.filename.endswith('.csv'):
+            df = pd.read_csv(BytesIO(content))
+        elif file.filename.endswith('.xlsx'):
+            df = pd.read_excel(BytesIO(content))
+        else:
+            raise HTTPException(status_code=400, detail="Formato de arquivo não suportado")
+        
+        # Criar arquivo Excel na memória
+        output = BytesIO()
+        
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            # Aba 1: Dados Originais
+            df.to_excel(writer, sheet_name='Dados Originais', index=False)
+            
+            # Aba 2: Resumo Estatístico
+            if include_summary:
+                summary_stats = df.describe()
+                summary_stats.to_excel(writer, sheet_name='Resumo Estatístico')
+                
+                # Adicionar informações gerais
+                summary_info = pd.DataFrame({
+                    'Métrica': ['Total de Registros', 'Total de Colunas', 'Data de Geração'],
+                    'Valor': [len(df), len(df.columns), datetime.now().strftime('%Y-%m-%d %H:%M:%S')]
+                })
+                summary_info.to_excel(writer, sheet_name='Resumo Estatístico', startrow=len(summary_stats) + 3, index=False)
+            
+            # Aba 3: Análise Específica baseada no tipo
+            if report_type == 'summary':
+                # Análise geral
+                analysis_sheet = pd.DataFrame({
+                    'Análise': ['Tipo de Relatório', 'Total de Registros', 'Colunas Disponíveis'],
+                    'Valor': ['Resumo Geral', len(df), ', '.join(df.columns.tolist())]
+                })
+                analysis_sheet.to_excel(writer, sheet_name='Análise Geral', index=False)
+                
+            elif report_type == 'geography' and region_column and value_column:
+                # Análise geográfica
+                if region_column in df.columns and value_column in df.columns:
+                    geo_analysis = df.groupby(region_column)[value_column].agg(['sum', 'mean', 'count']).reset_index()
+                    geo_analysis.columns = [region_column, 'Total', 'Média', 'Quantidade']
+                    geo_analysis['Percentual'] = (geo_analysis['Total'] / geo_analysis['Total'].sum() * 100).round(2)
+                    geo_analysis.to_excel(writer, sheet_name='Análise Geográfica', index=False)
+                
+            elif report_type == 'trend' and date_column and value_column:
+                # Análise temporal
+                if date_column in df.columns and value_column in df.columns:
+                    # Converter para datetime se possível
+                    try:
+                        df[date_column] = pd.to_datetime(df[date_column])
+                        trend_analysis = df.groupby(df[date_column].dt.to_period('M'))[value_column].agg(['sum', 'mean']).reset_index()
+                        trend_analysis.columns = ['Período', 'Total', 'Média']
+                        trend_analysis.to_excel(writer, sheet_name='Análise Temporal', index=False)
+                    except:
+                        # Se não conseguir converter, agrupar por valores únicos
+                        trend_analysis = df.groupby(date_column)[value_column].agg(['sum', 'mean']).reset_index()
+                        trend_analysis.columns = [date_column, 'Total', 'Média']
+                        trend_analysis.to_excel(writer, sheet_name='Análise Temporal', index=False)
+                
+            elif report_type == 'risk' and value_column:
+                # Análise de risco
+                if value_column in df.columns:
+                    # Calcular estatísticas de risco
+                    risk_stats = pd.DataFrame({
+                        'Métrica': ['Média', 'Desvio Padrão', 'Mínimo', 'Máximo', 'Mediana'],
+                        'Valor': [
+                            df[value_column].mean(),
+                            df[value_column].std(),
+                            df[value_column].min(),
+                            df[value_column].max(),
+                            df[value_column].median()
+                        ]
+                    })
+                    risk_stats.to_excel(writer, sheet_name='Análise de Risco', index=False)
+                    
+                    # Identificar outliers
+                    Q1 = df[value_column].quantile(0.25)
+                    Q3 = df[value_column].quantile(0.75)
+                    IQR = Q3 - Q1
+                    outliers = df[(df[value_column] < Q1 - 1.5 * IQR) | (df[value_column] > Q3 + 1.5 * IQR)]
+                    if len(outliers) > 0:
+                        outliers.to_excel(writer, sheet_name='Outliers', index=False)
+                
+            elif report_type == 'custom' and custom_analysis:
+                # Análise customizada
+                custom_sheet = pd.DataFrame({
+                    'Análise Customizada': [custom_analysis],
+                    'Data de Geração': [datetime.now().strftime('%Y-%m-%d %H:%M:%S')],
+                    'Total de Registros': [len(df)]
+                })
+                custom_sheet.to_excel(writer, sheet_name='Análise Customizada', index=False)
+            
+            # Aba 4: Metadados
+            metadata = pd.DataFrame({
+                'Campo': ['Título do Relatório', 'Tipo de Análise', 'Arquivo Original', 'Data de Geração', 'Usuário'],
+                'Valor': [title, report_type, file.filename, datetime.now().strftime('%Y-%m-%d %H:%M:%S'), current_user]
+            })
+            metadata.to_excel(writer, sheet_name='Metadados', index=False)
+        
+        # Preparar resposta
+        output.seek(0)
+        filename = f"relatorio_{report_type}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        
+        return StreamingResponse(
+            BytesIO(output.getvalue()),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao gerar relatório Excel: {str(e)}")
+
+@router.post("/reports/generate-excel-from-template")
+@limiter.limit("10/minute")
+async def generate_excel_from_template(
+    file: UploadFile = File(...),
+    template_id: int = Form(..., description="ID do template a ser usado"),
+    title: str = Form("Relatório com Template", description="Título do relatório"),
+    current_user: str = CurrentUser,
+    request: Request = None
+):
+    """
+    Gera relatório em Excel usando um template pré-configurado
+    """
+    try:
+        # Buscar o template
+        template_response = supabase.table("templates").select("*").eq("id", template_id).eq("user_id", current_user).single().execute()
+        if not template_response.data:
+            raise HTTPException(status_code=404, detail="Template não encontrado")
+        
+        template = template_response.data
+        config = template['config']
+        
+        # Ler o arquivo
+        content = await file.read()
+        if file.filename.endswith('.csv'):
+            df = pd.read_csv(BytesIO(content))
+        elif file.filename.endswith('.xlsx'):
+            df = pd.read_excel(BytesIO(content))
+        else:
+            raise HTTPException(status_code=400, detail="Formato de arquivo não suportado")
+        
+        # Criar arquivo Excel na memória
+        output = BytesIO()
+        
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            # Aba 1: Dados Originais
+            df.to_excel(writer, sheet_name='Dados Originais', index=False)
+            
+            # Aba 2: Análise baseada no template
+            analysis_type = config.get('analysis_type')
+            
+            if analysis_type == 'geography':
+                value_col = config.get('value_column')
+                region_col = config.get('region_column')
+                
+                if value_col in df.columns and region_col in df.columns:
+                    geo_analysis = df.groupby(region_col)[value_col].agg(['sum', 'mean', 'count']).reset_index()
+                    geo_analysis.columns = [region_col, 'Total', 'Média', 'Quantidade']
+                    geo_analysis['Percentual'] = (geo_analysis['Total'] / geo_analysis['Total'].sum() * 100).round(2)
+                    geo_analysis.to_excel(writer, sheet_name='Análise Geográfica', index=False)
+            
+            elif analysis_type == 'trend':
+                date_col = config.get('date_column')
+                value_col = config.get('value_column')
+                
+                if date_col in df.columns and value_col in df.columns:
+                    try:
+                        df[date_col] = pd.to_datetime(df[date_col])
+                        trend_analysis = df.groupby(df[date_col].dt.to_period('M'))[value_col].agg(['sum', 'mean']).reset_index()
+                        trend_analysis.columns = ['Período', 'Total', 'Média']
+                        trend_analysis.to_excel(writer, sheet_name='Análise Temporal', index=False)
+                    except:
+                        trend_analysis = df.groupby(date_col)[value_col].agg(['sum', 'mean']).reset_index()
+                        trend_analysis.columns = [date_col, 'Total', 'Média']
+                        trend_analysis.to_excel(writer, sheet_name='Análise Temporal', index=False)
+            
+            elif analysis_type == 'risk-score':
+                # Análise de risco baseada no template
+                risk_factors = config.get('risk_factors', [])
+                if risk_factors:
+                    risk_data = []
+                    for factor in risk_factors:
+                        col = factor.get('column')
+                        if col in df.columns:
+                            risk_data.append({
+                                'Fator': col,
+                                'Média': df[col].mean(),
+                                'Desvio Padrão': df[col].std(),
+                                'Peso': factor.get('weight', 0)
+                            })
+                    
+                    if risk_data:
+                        risk_df = pd.DataFrame(risk_data)
+                        risk_df.to_excel(writer, sheet_name='Análise de Risco', index=False)
+            
+            # Aba 3: Configuração do Template
+            template_info = pd.DataFrame({
+                'Campo': ['Nome do Template', 'Descrição', 'Tipo de Análise', 'Configuração'],
+                'Valor': [template['name'], template['description'], analysis_type, str(config)]
+            })
+            template_info.to_excel(writer, sheet_name='Template Info', index=False)
+            
+            # Aba 4: Metadados
+            metadata = pd.DataFrame({
+                'Campo': ['Título do Relatório', 'Template Usado', 'Arquivo Original', 'Data de Geração', 'Usuário'],
+                'Valor': [title, template['name'], file.filename, datetime.now().strftime('%Y-%m-%d %H:%M:%S'), current_user]
+            })
+            metadata.to_excel(writer, sheet_name='Metadados', index=False)
+        
+        # Preparar resposta
+        output.seek(0)
+        filename = f"relatorio_template_{template['name'].replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        
+        return StreamingResponse(
+            BytesIO(output.getvalue()),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao gerar relatório Excel com template: {str(e)}") 
