@@ -19,7 +19,7 @@ class Report(ReportBase):
 class TemplateBase(BaseModel):
     name: str
     description: Optional[str] = None
-    content: str  # JSON ou string com estrutura do template
+    config: dict  # JSON com estrutura do template
 
 class TemplateCreate(TemplateBase):
     pass
