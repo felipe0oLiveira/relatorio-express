@@ -21,8 +21,8 @@ async function testAuth() {
     try {
         // 1. Tentar fazer login com credenciais de teste
         const { data, error } = await supabase.auth.signInWithPassword({
-            email: 'test@autoreport.com',
-            password: 'password123'
+            email: 'teste@email.com',
+            password: 'Senha123'
         });
         
         if (error) {
