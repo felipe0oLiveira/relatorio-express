@@ -117,6 +117,8 @@ test_data.csv
 config.env
 .env.local
 .env.production
+config.env.example.complete
+*.env.example.complete
 
 # Logs
 logs/
