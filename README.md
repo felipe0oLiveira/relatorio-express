@@ -4,6 +4,7 @@ Sistema completo de relatórios automatizados com monitoramento em tempo real.
 
 <!-- Última atualização: demonstração de commit e push separados -->
 <!-- Security: vazamentos corrigidos - GitGuardian alert resolved -->
+<!-- Security: histórico limpo - todos os segredos removidos -->
 
 ## 🚀 Visão Geral
 
