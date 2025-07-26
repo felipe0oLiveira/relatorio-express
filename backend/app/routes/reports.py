@@ -350,20 +350,70 @@ async def analyze_geography(
             df = pd.read_excel(BytesIO(content))
         else:
             raise HTTPException(status_code=400, detail="Formato de arquivo não suportado")
+        
         if geo_col not in df.columns:
             raise HTTPException(status_code=400, detail="Coluna geográfica não encontrada")
+        
+        # Configurar pandas para não usar notação científica
+        pd.set_option('display.float_format', lambda x: '%.2f' % x)
+        
         if agg == "count":
             result = df[geo_col].value_counts().to_dict()
+            # Converter para formato adequado para gráficos
+            chart_data = {
+                "labels": list(result.keys()),
+                "values": list(result.values()),
+                "chart_type": "bar",
+                "title": f"Contagem por {geo_col}",
+                "subtitle": f"Total de registros: {sum(result.values())}"
+            }
         elif agg in ("sum", "mean") and value_col:
             if value_col not in df.columns:
                 raise HTTPException(status_code=400, detail="Coluna de valor não encontrada")
+            
             if agg == "sum":
-                result = df.groupby(geo_col)[value_col].sum().to_dict()
+                grouped = df.groupby(geo_col)[value_col].sum()
+                title = f"Soma de {value_col} por {geo_col}"
             else:
-                result = df.groupby(geo_col)[value_col].mean().to_dict()
+                grouped = df.groupby(geo_col)[value_col].mean()
+                title = f"Média de {value_col} por {geo_col}"
+            
+            # Ordenar por valor decrescente
+            grouped = grouped.sort_values(ascending=False)
+            
+            # Formatar valores para evitar notação científica
+            formatted_values = []
+            for val in grouped.values:
+                if val >= 1e6:
+                    formatted_values.append(f"{val/1e6:.2f}M")
+                elif val >= 1e3:
+                    formatted_values.append(f"{val/1e3:.2f}K")
+                else:
+                    formatted_values.append(f"{val:.2f}")
+            
+            chart_data = {
+                "labels": list(grouped.index),
+                "values": list(grouped.values),
+                "formatted_values": formatted_values,
+                "chart_type": "bar",
+                "title": title,
+                "subtitle": f"Total: {grouped.sum():,.2f}" if agg == "sum" else f"Média geral: {grouped.mean():,.2f}",
+                "total": float(grouped.sum()) if agg == "sum" else float(grouped.mean()),
+                "count": len(grouped)
+            }
         else:
             raise HTTPException(status_code=400, detail="Agregação não suportada ou coluna de valor ausente")
-        return {"geo_summary": result}
+        
+        return {
+            "geo_summary": grouped.to_dict() if 'grouped' in locals() else result,
+            "chart_data": chart_data,
+            "metadata": {
+                "geo_column": geo_col,
+                "value_column": value_col,
+                "aggregation": agg,
+                "total_records": len(df)
+            }
+        }
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Erro ao analisar geografia: {str(e)}")
 
@@ -534,6 +584,9 @@ async def generate_excel_report(
         output = BytesIO()
         
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            # Configurar pandas para não usar notação científica
+            pd.set_option('display.float_format', lambda x: '%.2f' % x)
+            
             # Aba 1: Dados Originais
             df.to_excel(writer, sheet_name='Dados Originais', index=False)
             
@@ -550,6 +603,12 @@ async def generate_excel_report(
                 summary_info.to_excel(writer, sheet_name='Resumo Estatístico', startrow=len(summary_stats) + 3, index=False)
             
             # Aba 3: Análise Específica baseada no tipo
+            print(f"🔍 Debug - report_type: '{report_type}'")
+            print(f"🔍 Debug - region_column: '{region_column}'")
+            print(f"🔍 Debug - value_column: '{value_column}'")
+            print(f"🔍 Debug - include_charts: {include_charts}")
+            print(f"🔍 Debug - Colunas disponíveis: {df.columns.tolist()}")
+            
             if report_type == 'summary':
                 # Análise geral
                 analysis_sheet = pd.DataFrame({
@@ -558,13 +617,79 @@ async def generate_excel_report(
                 })
                 analysis_sheet.to_excel(writer, sheet_name='Análise Geral', index=False)
                 
-            elif report_type == 'geography' and region_column and value_column:
+            elif report_type == 'geography' and region_column and value_column and region_column.strip() and value_column.strip():
+                print(f"✅ Condição geography atendida!")
                 # Análise geográfica
                 if region_column in df.columns and value_column in df.columns:
+                    print(f"✅ Colunas encontradas no DataFrame!")
                     geo_analysis = df.groupby(region_column)[value_column].agg(['sum', 'mean', 'count']).reset_index()
                     geo_analysis.columns = [region_column, 'Total', 'Média', 'Quantidade']
                     geo_analysis['Percentual'] = (geo_analysis['Total'] / geo_analysis['Total'].sum() * 100).round(2)
+                    
+                    # Ordenar por total decrescente
+                    geo_analysis = geo_analysis.sort_values('Total', ascending=False)
+                    
                     geo_analysis.to_excel(writer, sheet_name='Análise Geográfica', index=False)
+                    
+                    # Formatação será aplicada na etapa final
+                    print(f"📊 Dados da análise geográfica salvos - formatação será aplicada na etapa final")
+                    
+                    # Adicionar gráfico se include_charts for True
+                    if include_charts:
+                        print(f"🎯 Tentando adicionar gráfico...")
+                        print(f"📊 Dados: {len(geo_analysis)} linhas")
+                        print(f"📋 Colunas: {geo_analysis.columns.tolist()}")
+                        
+                        try:
+                            from openpyxl.chart import BarChart, Reference
+                            from openpyxl.chart.label import DataLabelList
+                            print("✅ Módulos importados com sucesso")
+                            
+                            # Obter a planilha - tentar diferentes abordagens
+                            try:
+                                worksheet = writer.sheets['Análise Geográfica']
+                                print(f"📄 Planilha obtida via writer.sheets: {worksheet.title}")
+                            except:
+                                # Tentar obter via workbook
+                                workbook = writer.book
+                                worksheet = workbook['Análise Geográfica']
+                                print(f"📄 Planilha obtida via workbook: {worksheet.title}")
+                            
+                            # Criar gráfico de barras
+                            chart = BarChart()
+                            chart.title = f"Análise de {value_column} por {region_column}"
+                            chart.style = 10
+                            chart.x_axis.title = region_column
+                            chart.y_axis.title = value_column
+                            print("📈 Gráfico criado")
+                            
+                            # Dados para o gráfico (Total por região)
+                            data = Reference(worksheet, min_col=2, min_row=1, max_row=len(geo_analysis)+1, max_col=2)
+                            cats = Reference(worksheet, min_col=1, min_row=2, max_row=len(geo_analysis)+1)
+                            print(f"📊 Referências criadas: dados={data}, categorias={cats}")
+                            
+                            chart.add_data(data, titles_from_data=True)
+                            chart.set_categories(cats)
+                            print("📊 Dados adicionados ao gráfico")
+                            
+                            # Adicionar rótulos de dados
+                            chart.dataLabels = DataLabelList()
+                            chart.dataLabels.showVal = True
+                            print("🏷️ Rótulos adicionados")
+                            
+                            # Inserir gráfico na planilha
+                            worksheet.add_chart(chart, "G2")
+                            print(f"✅ Gráfico adicionado com sucesso na posição G2")
+                            
+                        except Exception as e:
+                            print(f"❌ Erro ao adicionar gráfico: {str(e)}")
+                            import traceback
+                            print(f"🔍 Traceback: {traceback.format_exc()}")
+                            # Se openpyxl.chart não estiver disponível, continuar sem gráfico
+                            pass
+                else:
+                    print(f"❌ Colunas não encontradas: {region_column} ou {value_column}")
+                    print(f"📋 Colunas disponíveis: {df.columns.tolist()}")
                 
             elif report_type == 'trend' and date_column and value_column:
                 # Análise temporal
@@ -621,15 +746,137 @@ async def generate_excel_report(
             })
             metadata.to_excel(writer, sheet_name='Metadados', index=False)
         
-        # Preparar resposta
-        output.seek(0)
-        filename = f"relatorio_{report_type}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-        
-        return StreamingResponse(
-            BytesIO(output.getvalue()),
-            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers={"Content-Disposition": f"attachment; filename={filename}"}
-        )
+        # Aplicar formatação aos números
+        try:
+            from openpyxl import load_workbook
+            from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+            from openpyxl.utils import get_column_letter
+            
+            # Salvar temporariamente e recarregar para aplicar formatação
+            temp_output = BytesIO()
+            temp_output.write(output.getvalue())
+            temp_output.seek(0)
+            
+            wb = load_workbook(temp_output)
+            
+            # Aplicar formatação a todas as planilhas
+            for sheet_name in wb.sheetnames:
+                ws = wb[sheet_name]
+                print(f"🔧 Formatando planilha: {sheet_name}")
+                
+                # Formatar cabeçalhos
+                for cell in ws[1]:
+                    cell.font = Font(bold=True, color="FFFFFF")
+                    cell.fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+                    cell.alignment = Alignment(horizontal="center")
+                
+                # Formatação específica para Análise Geográfica
+                if sheet_name == 'Análise Geográfica':
+                    print(f"🎯 Aplicando formatação específica para Análise Geográfica")
+                    
+                    # Definir larguras específicas
+                    ws.column_dimensions['A'].width = 15  # Region
+                    ws.column_dimensions['B'].width = 25  # Total
+                    ws.column_dimensions['C'].width = 20  # Média
+                    ws.column_dimensions['D'].width = 20  # Quantidade
+                    ws.column_dimensions['E'].width = 15  # Percentual
+                    
+                    # Formatar cada coluna especificamente
+                    for row in range(2, ws.max_row + 1):
+                        # Coluna B - Total (formatação de milhões)
+                        cell_b = ws[f'B{row}']
+                        if isinstance(cell_b.value, (int, float)) and cell_b.value is not None:
+                            if cell_b.value >= 1e9:
+                                cell_b.number_format = '#,##0.0"B"'
+                            elif cell_b.value >= 1e6:
+                                cell_b.number_format = '#,##0.0"M"'
+                            elif cell_b.value >= 1e3:
+                                cell_b.number_format = '#,##0.0"K"'
+                            else:
+                                cell_b.number_format = '#,##0.00'
+                            print(f"📊 Célula B{row}: {cell_b.value} -> formatada")
+                        
+                        # Coluna C - Média (formatação de milhares)
+                        cell_c = ws[f'C{row}']
+                        if isinstance(cell_c.value, (int, float)) and cell_c.value is not None:
+                            if cell_c.value >= 1e6:
+                                cell_c.number_format = '#,##0.0"M"'
+                            elif cell_c.value >= 1e3:
+                                cell_c.number_format = '#,##0.0"K"'
+                            else:
+                                cell_c.number_format = '#,##0.00'
+                        
+                        # Coluna D - Quantidade (formatação de milhares)
+                        cell_d = ws[f'D{row}']
+                        if isinstance(cell_d.value, (int, float)) and cell_d.value is not None:
+                            if cell_d.value >= 1e6:
+                                cell_d.number_format = '#,##0.0"M"'
+                            elif cell_d.value >= 1e3:
+                                cell_d.number_format = '#,##0.0"K"'
+                            else:
+                                cell_d.number_format = '#,##0.00'
+                        
+                        # Coluna E - Percentual
+                        cell_e = ws[f'E{row}']
+                        if isinstance(cell_e.value, (int, float)) and cell_e.value is not None:
+                            cell_e.number_format = '0.00"%"'
+                
+                else:
+                    # Formatação padrão para outras planilhas
+                    for row in ws.iter_rows(min_row=2):
+                        for cell in row:
+                            if isinstance(cell.value, (int, float)) and cell.value is not None:
+                                if cell.value >= 1e9:
+                                    cell.number_format = '#,##0.0"B"'
+                                elif cell.value >= 1e6:
+                                    cell.number_format = '#,##0.0"M"'
+                                elif cell.value >= 1e3:
+                                    cell.number_format = '#,##0.0"K"'
+                                else:
+                                    cell.number_format = '#,##0.00'
+                    
+                    # Ajustar largura das colunas para outras planilhas
+                    for column in ws.columns:
+                        max_length = 0
+                        column_letter = get_column_letter(column[0].column)
+                        for cell in column:
+                            try:
+                                cell_value = str(cell.value) if cell.value is not None else ""
+                                if len(cell_value) > max_length:
+                                    max_length = len(cell_value)
+                            except:
+                                pass
+                        adjusted_width = min(max_length + 4, 60)
+                        ws.column_dimensions[column_letter].width = adjusted_width
+            
+            print(f"✅ Formatação aplicada com sucesso!")
+            
+            # Salvar com formatação
+            final_output = BytesIO()
+            wb.save(final_output)
+            final_output.seek(0)
+            
+            filename = f"relatorio_{report_type}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+            
+            return StreamingResponse(
+                final_output,
+                media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                headers={"Content-Disposition": f"attachment; filename={filename}"}
+            )
+            
+        except Exception as e:
+            print(f"❌ Erro na formatação: {str(e)}")
+            import traceback
+            print(f"🔍 Traceback: {traceback.format_exc()}")
+            # Se a formatação falhar, retornar sem formatação
+            output.seek(0)
+            filename = f"relatorio_{report_type}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+            
+            return StreamingResponse(
+                BytesIO(output.getvalue()),
+                media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                headers={"Content-Disposition": f"attachment; filename={filename}"}
+            )
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao gerar relatório Excel: {str(e)}")
@@ -638,22 +885,29 @@ async def generate_excel_report(
 @limiter.limit("10/minute")
 async def generate_excel_from_template(
     file: UploadFile = File(...),
-    template_id: int = Form(..., description="ID do template a ser usado"),
+    template_id: str = Form(..., description="ID do template a ser usado (ex: geography_sales, trend_monthly)"),
     title: str = Form("Relatório com Template", description="Título do relatório"),
+    include_charts: bool = Form(True, description="Incluir gráficos no Excel"),
     current_user: str = CurrentUser,
     request: Request = None
 ):
     """
-    Gera relatório em Excel usando um template pré-configurado
+    Gera relatório em Excel usando um template pré-configurado com formatação e gráficos
     """
     try:
-        # Buscar o template
-        template_response = supabase.table("templates").select("*").eq("id", template_id).eq("user_id", current_user).single().execute()
-        if not template_response.data:
-            raise HTTPException(status_code=404, detail="Template não encontrado")
+        # Importar templates pré-configurados
+        from .templates import PREDEFINED_TEMPLATES
         
-        template = template_response.data
-        config = template['config']
+        # Buscar o template pré-configurado
+        if template_id not in PREDEFINED_TEMPLATES:
+            raise HTTPException(status_code=404, detail=f"Template '{template_id}' não encontrado. Templates disponíveis: {list(PREDEFINED_TEMPLATES.keys())}")
+        
+        template_data = PREDEFINED_TEMPLATES[template_id]
+        config = template_data['config']
+        
+        print(f"🎯 Debug - template_id: '{template_id}'")
+        print(f"🎯 Debug - analysis_type: '{config.get('analysis_type')}'")
+        print(f"🎯 Debug - include_charts: {include_charts}")
         
         # Ler o arquivo
         content = await file.read()
@@ -663,6 +917,11 @@ async def generate_excel_from_template(
             df = pd.read_excel(BytesIO(content))
         else:
             raise HTTPException(status_code=400, detail="Formato de arquivo não suportado")
+        
+        print(f"📋 Colunas disponíveis: {df.columns.tolist()}")
+        
+        # Configurar pandas para não usar notação científica
+        pd.set_option('display.float_format', lambda x: '%.2f' % x)
         
         # Criar arquivo Excel na memória
         output = BytesIO()
@@ -678,11 +937,76 @@ async def generate_excel_from_template(
                 value_col = config.get('value_column')
                 region_col = config.get('region_column')
                 
+                print(f"🎯 Debug - region_column: '{region_col}'")
+                print(f"🎯 Debug - value_column: '{value_col}'")
+                
                 if value_col in df.columns and region_col in df.columns:
+                    print(f"✅ Condição geography atendida!")
+                    print(f"✅ Colunas encontradas no DataFrame!")
+                    
                     geo_analysis = df.groupby(region_col)[value_col].agg(['sum', 'mean', 'count']).reset_index()
                     geo_analysis.columns = [region_col, 'Total', 'Média', 'Quantidade']
                     geo_analysis['Percentual'] = (geo_analysis['Total'] / geo_analysis['Total'].sum() * 100).round(2)
                     geo_analysis.to_excel(writer, sheet_name='Análise Geográfica', index=False)
+                    
+                    print(f"📊 Dados da análise geográfica salvos - formatação será aplicada na etapa final")
+                    
+                    # Adicionar gráfico se include_charts for True
+                    if include_charts:
+                        print(f"🎯 Tentando adicionar gráfico...")
+                        print(f"📊 Dados: {len(geo_analysis)} linhas")
+                        print(f"📋 Colunas: {geo_analysis.columns.tolist()}")
+                        
+                        try:
+                            from openpyxl.chart import BarChart, Reference
+                            from openpyxl.chart.label import DataLabelList
+                            print("✅ Módulos importados com sucesso")
+                            
+                            # Obter a planilha
+                            try:
+                                worksheet = writer.sheets['Análise Geográfica']
+                                print(f"📄 Planilha obtida via writer.sheets: {worksheet.title}")
+                            except:
+                                # Tentar obter via workbook
+                                workbook = writer.book
+                                worksheet = workbook['Análise Geográfica']
+                                print(f"📄 Planilha obtida via workbook: {worksheet.title}")
+                            
+                            # Criar gráfico de barras
+                            chart = BarChart()
+                            chart.title = f"Análise de {value_col} por {region_col}"
+                            chart.style = 10
+                            chart.x_axis.title = region_col
+                            chart.y_axis.title = value_col
+                            print("📈 Gráfico criado")
+                            
+                            # Dados para o gráfico (Total por região)
+                            data = Reference(worksheet, min_col=2, min_row=1, max_row=len(geo_analysis)+1, max_col=2)
+                            cats = Reference(worksheet, min_col=1, min_row=2, max_row=len(geo_analysis)+1)
+                            print(f"📊 Referências criadas: dados={data}, categorias={cats}")
+                            
+                            chart.add_data(data, titles_from_data=True)
+                            chart.set_categories(cats)
+                            print("📊 Dados adicionados ao gráfico")
+                            
+                            # Adicionar rótulos de dados
+                            chart.dataLabels = DataLabelList()
+                            chart.dataLabels.showVal = True
+                            print("🏷️ Rótulos adicionados")
+                            
+                            # Inserir gráfico na planilha
+                            worksheet.add_chart(chart, "G2")
+                            print(f"✅ Gráfico adicionado com sucesso na posição G2")
+                            
+                        except Exception as e:
+                            print(f"❌ Erro ao adicionar gráfico: {str(e)}")
+                            import traceback
+                            print(f"🔍 Traceback: {traceback.format_exc()}")
+                            # Se openpyxl.chart não estiver disponível, continuar sem gráfico
+                            pass
+                else:
+                    print(f"❌ Colunas não encontradas: {region_col} ou {value_col}")
+                    print(f"📋 Colunas disponíveis: {df.columns.tolist()}")
             
             elif analysis_type == 'trend':
                 date_col = config.get('date_column')
@@ -721,26 +1045,133 @@ async def generate_excel_from_template(
             # Aba 3: Configuração do Template
             template_info = pd.DataFrame({
                 'Campo': ['Nome do Template', 'Descrição', 'Tipo de Análise', 'Configuração'],
-                'Valor': [template['name'], template['description'], analysis_type, str(config)]
+                'Valor': [template_data['name'], template_data['description'], analysis_type, str(config)]
             })
             template_info.to_excel(writer, sheet_name='Template Info', index=False)
             
             # Aba 4: Metadados
             metadata = pd.DataFrame({
                 'Campo': ['Título do Relatório', 'Template Usado', 'Arquivo Original', 'Data de Geração', 'Usuário'],
-                'Valor': [title, template['name'], file.filename, datetime.now().strftime('%Y-%m-%d %H:%M:%S'), current_user]
+                'Valor': [title, template_data['name'], file.filename, datetime.now().strftime('%Y-%m-%d %H:%M:%S'), current_user]
             })
             metadata.to_excel(writer, sheet_name='Metadados', index=False)
         
-        # Preparar resposta
-        output.seek(0)
-        filename = f"relatorio_template_{template['name'].replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-        
-        return StreamingResponse(
-            BytesIO(output.getvalue()),
-            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers={"Content-Disposition": f"attachment; filename={filename}"}
-        )
+        # Aplicar formatação profissional
+        try:
+            print(f"🎨 Aplicando formatação profissional...")
+            
+            # Carregar o workbook para formatação
+            from openpyxl import load_workbook
+            from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+            from openpyxl.utils import get_column_letter
+            
+            # Salvar temporariamente e recarregar para formatação
+            temp_output = BytesIO()
+            temp_output.write(output.getvalue())
+            temp_output.seek(0)
+            
+            wb = load_workbook(temp_output)
+            
+            # Formatar cada planilha
+            for sheet_name in wb.sheetnames:
+                print(f"Formatando planilha: {sheet_name}")
+                ws = wb[sheet_name]
+                
+                # Formatar cabeçalhos
+                header_font = Font(bold=True, color="FFFFFF")
+                header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+                header_alignment = Alignment(horizontal="center", vertical="center")
+                
+                for cell in ws[1]:
+                    cell.font = header_font
+                    cell.fill = header_fill
+                    cell.alignment = header_alignment
+                
+                # Ajustar largura das colunas
+                for column in ws.columns:
+                    max_length = 0
+                    column_letter = get_column_letter(column[0].column)
+                    for cell in column:
+                        try:
+                            cell_value = str(cell.value) if cell.value is not None else ""
+                            if len(cell_value) > max_length:
+                                max_length = len(cell_value)
+                        except:
+                            pass
+                    adjusted_width = min(max_length + 4, 60)
+                    ws.column_dimensions[column_letter].width = adjusted_width
+                
+                # Formatação específica para Análise Geográfica
+                if sheet_name == 'Análise Geográfica':
+                    print(f"Aplicando formatação específica para Análise Geográfica")
+                    
+                    # Formatar coluna Total (coluna B) com largura extra e formatação específica
+                    ws.column_dimensions['B'].width = 25
+                    
+                    # Formatar valores da coluna Total
+                    for row in range(2, ws.max_row + 1):
+                        cell = ws[f'B{row}']
+                        if isinstance(cell.value, (int, float)) and cell.value is not None:
+                            if cell.value >= 1e9:
+                                cell.number_format = '#,##0.0"B"'
+                            elif cell.value >= 1e6:
+                                cell.number_format = '#,##0.0"M"'
+                            elif cell.value >= 1e3:
+                                cell.number_format = '#,##0.0"K"'
+                            else:
+                                cell.number_format = '#,##0.00'
+                            print(f"Célula B{row}: {cell.value} -> formatada")
+                    
+                    # Formatar coluna Percentual (coluna E) como porcentagem
+                    for row in range(2, ws.max_row + 1):
+                        cell = ws[f'E{row}']
+                        if isinstance(cell.value, (int, float)):
+                            cell.number_format = '0.00"%"'
+                    
+                    print(f"✅ Formatação específica aplicada à planilha 'Análise Geográfica'")
+                
+                else:
+                    # Formatação padrão para outras planilhas
+                    for row in ws.iter_rows(min_row=2):
+                        for cell in row:
+                            if isinstance(cell.value, (int, float)) and cell.value is not None:
+                                if cell.value >= 1e9:
+                                    cell.number_format = '#,##0.0"B"'
+                                elif cell.value >= 1e6:
+                                    cell.number_format = '#,##0.0"M"'
+                                elif cell.value >= 1e3:
+                                    cell.number_format = '#,##0.0"K"'
+                                else:
+                                    cell.number_format = '#,##0.00'
+            
+            print(f"✅ Formatação aplicada com sucesso!")
+            
+            # Salvar com formatação
+            final_output = BytesIO()
+            wb.save(final_output)
+            final_output.seek(0)
+            
+            filename = f"relatorio_template_{template_data['name'].replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+            
+            return StreamingResponse(
+                final_output,
+                media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                headers={"Content-Disposition": f"attachment; filename={filename}"}
+            )
+            
+        except Exception as e:
+            print(f"❌ Erro na formatação: {str(e)}")
+            import traceback
+            print(f"🔍 Traceback: {traceback.format_exc()}")
+            # Se a formatação falhar, retornar sem formatação
+            output.seek(0)
+            filename = f"relatorio_template_{template_data['name'].replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+            
+            return StreamingResponse(
+                BytesIO(output.getvalue()),
+                media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                headers={"Content-Disposition": f"attachment; filename={filename}"}
+            )
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao gerar relatório Excel com template: {str(e)}") 
