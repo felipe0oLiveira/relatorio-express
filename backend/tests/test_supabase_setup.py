@@ -69,7 +69,7 @@ async def test_supabase_setup():
             # Tentar fazer login com usuário de teste
             auth_data = {
                 "email": "test@autoreport.com",
-                "password": "test123456"
+                "password": "sua-senha-teste-aqui"  # Substitua pela senha real
             }
             
             auth_response = await client.post(
@@ -112,7 +112,7 @@ async def test_supabase_setup():
                 print("\n💡 Dica: Crie um usuário no dashboard do Supabase:")
                 print("   1. Authentication → Users → Add User")
                 print("   2. Email: test@autoreport.com")
-                print("   3. Password: test123456")
+                print("   3. Password: sua-senha-teste-aqui")
             
     except Exception as e:
         print(f"❌ Erro: {e}")

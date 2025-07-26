@@ -53,7 +53,7 @@ async def test_rls():
             # Credenciais de teste (ajuste conforme necessário)
             auth_data = {
                 "email": "test@autoreport.com",
-                "password": "test123456"
+                "password": "sua-senha-teste-aqui"  # Substitua pela senha real
             }
             
             auth_response = await client.post(
@@ -71,7 +71,7 @@ async def test_rls():
                 print("\n💡 Crie um usuário no Supabase:")
                 print("   Authentication → Users → Add User")
                 print("   Email: test@autoreport.com")
-                print("   Password: test123456")
+                print("   Password: sua-senha-teste-aqui")
                 return False
             
             auth_result = auth_response.json()
