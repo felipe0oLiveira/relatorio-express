@@ -1,198 +1,246 @@
-# AutoReport SaaS
+# 📊 AutoReport SaaS
 
-## Visão Geral
+Plataforma completa de relatórios automáticos com inteligência artificial para análise de dados.
 
-O **AutoReport SaaS** é uma plataforma inovadora para automação e inteligência em relatórios, criada para atender empresas, analistas e gestores que precisam transformar dados em decisões de forma ágil, segura e inteligente. Nossa solução permite que usuários importem, processem e visualizem dados de maneira intuitiva, com recursos avançados de análise, dashboards dinâmicos e integração com inteligência artificial.
+## 🚀 Visão Geral
 
-### Diferenciais do Projeto
-- **Automação completa**: Do upload ao relatório final, tudo em poucos cliques.
-- **Inteligência Artificial**: Geração de insights, análises preditivas e dashboards automáticos.
-- **Segurança de dados**: Criptografia, autenticação robusta e controle de acesso.
-- **Experiência do usuário**: Interface moderna, responsiva e acessível.
-- **Escalabilidade**: Arquitetura pronta para crescer junto com o seu negócio.
+O AutoReport SaaS é uma solução completa que permite transformar dados brutos em insights valiosos através de análise automatizada com IA. A plataforma oferece upload simples, processamento inteligente e geração de relatórios profissionais.
 
-### Público-alvo
-- Pequenas, médias e grandes empresas
-- Analistas de dados, gestores, consultores e equipes de BI
-- Qualquer organização que precise automatizar relatórios e extrair valor de dados
-
-### Contexto
-O AutoReport SaaS nasce da necessidade de democratizar o acesso à análise de dados avançada, reduzindo o tempo e o custo para transformar dados brutos em informações estratégicas. Combinando backend robusto, frontend interativo e IA, entregamos uma solução completa para o mercado.
-
----
-
-## Sumário
-- [Arquitetura e Tecnologias](#arquitetura-e-tecnologias)
-- [Como será desenvolvido o Frontend](#como-será-desenvolvido-o-frontend)
-- [Inteligência Artificial no Backend](#inteligência-artificial-no-backend)
-- [Boas Práticas Adotadas](#boas-práticas-adotadas)
-- [Segurança de Dados](#segurança-de-dados)
-- [Estrutura de Pastas](#estrutura-de-pastas)
-- [Como rodar o projeto](#como-rodar-o-projeto)
-- [Contribuindo](#contribuindo)
-- [Contato](#contato)
-
----
-
-> ⚠️ **Este projeto está em desenvolvimento ativo!**
-> 
-> Atualmente, o foco está na construção do backend. Em breve, iniciaremos a implementação e aprimoramento do frontend.
-
-## Próximas aplicações planejadas para o backend
-
-1. **Notificações e envio de e-mails:**
-   - Serviço para notificar usuários sobre eventos importantes (ex: relatório pronto, erro no processamento).
-2. **Auditoria e histórico de ações:**
-   - Registro detalhado das ações dos usuários para rastreabilidade e segurança.
-3. **Painel administrativo e gestão de permissões:**
-   - Administração do sistema, controle de papéis e permissões avançadas.
-
----
-
-## Arquitetura e Tecnologias
-
-### Backend
-- **Python 3.10+**
-- **FastAPI**: API moderna, rápida e segura
-- **Supabase**: Autenticação, banco de dados e storage
-- **Pandas**: Manipulação e análise de dados
-- **SlowAPI**: Rate limiting
-- **Criptografia**: Proteção de dados sensíveis
-
-### Frontend
-- **Next.js (React)**: Interface web moderna e responsiva
-- **Tailwind CSS**: Estilização rápida e consistente
-- **Supabase JS**: Integração com autenticação e storage
-
----
-
-## Como será desenvolvido o Frontend
-
-O frontend será construído com foco em:
-- **Design visual moderno, interativo e responsivo**: Utilizando Next.js (React) e Tailwind CSS para garantir uma experiência fluida e agradável em qualquer dispositivo.
-- **Facilidade de uso**: Interfaces intuitivas, navegação simples e feedback visual claro para o usuário.
-- **Boas práticas de desenvolvimento**:
-  - Componentização e reutilização de código
-  - Gerenciamento eficiente de estado
-  - Integração segura com o backend (autenticação, permissões, CORS)
-  - Testes de interface e usabilidade
-- **Acessibilidade**: Garantindo que o sistema seja utilizável por todos os públicos.
-
----
-
-## Inteligência Artificial no Backend
-
-O backend contará com integração de IA para:
-- **Análises de dados complexas**: Geração de insights automáticos a partir dos dados enviados pelos usuários.
-- **Dashboards inteligentes**: Criação automática de visualizações e resumos interativos, facilitando a tomada de decisão.
-- **Respostas customizadas**: Utilização de IA para responder perguntas específicas sobre os dados, além de sugestões de gráficos e análises.
-
----
-
-## Boas Práticas Adotadas
-
-- **Commits atômicos e descritivos**
-- **Separação clara de frontend e backend**
-- **Validação e tratamento de erros em toda a stack**
-- **Rate limiting e proteção contra abuso**
-- **Criptografia de dados sensíveis**
-- **Autenticação JWT/Supabase**
-- **Testes automatizados**
-- **Documentação automática (FastAPI)**
-- **Configuração por ambiente (.env)**
-- **Código limpo, tipado e modular**
-
----
-
-## Segurança de Dados
-
-- **Criptografia**: Dados sensíveis criptografados no backend
-- **Validação de entrada**: Sanitização e validação em todas as camadas
-- **Rate limiting**: Prevenção de ataques e abuso
-- **Autenticação robusta**: JWT e Supabase
-- **Controle de acesso**: Proteção de rotas e permissões
-- **Uploads protegidos**: Limite de tamanho, tipo e quantidade
-
----
-
-## Estrutura de Pastas
+## 📁 Estrutura do Projeto
 
 ```
 autoreport-saas/
-  ├── backend/
-  │   └── app/
-  │       ├── auth/           # Autenticação e JWT
-  │       ├── dependencies/   # Injeção de dependências
-  │       ├── models.py       # Modelos de dados
-  │       ├── routes/         # Rotas da API
-  │       ├── services/       # Serviços e integrações
-  │       ├── utils/          # Utilitários (criptografia, pandas, storage)
-  │       ├── limiter.py      # Rate limiter customizado
-  │       ├── main.py         # Ponto de entrada FastAPI
-  │       ├── requirements.txt# Dependências Python
-  ├── frontend/
-  │   ├── src/
-  │   │   ├── app/            # Páginas Next.js
-  │   │   ├── components/     # Componentes React
-  │   │   ├── lib/            # Integrações e utilitários
-  │   │   ├── pages/          # Rotas antigas (Next.js)
-  │   │   └── styles/         # Estilos globais
-  │   ├── public/             # Assets estáticos
-  │   ├── package.json        # Dependências frontend
-  │   └── ...
-  ├── README.md               # Este arquivo
-  └── ...
+├── backend/                    # API FastAPI com todas as funcionalidades
+├── frontend/                   # Interface principal para usuários
+├── monitoring-system/          # Sistema de monitoramento separado
+│   └── monitoring-dashboard/   # Dashboard de monitoramento para desenvolvedores
+├── database/                   # Scripts e configurações do banco
+├── docs/                       # Documentação técnica
+└── scripts/                    # Scripts de deploy e configuração
 ```
 
----
-
-## Como rodar o projeto
+## 🛠️ Tecnologias
 
 ### Backend
-1. Acesse a pasta backend:
-   ```bash
-   cd backend
-   ```
-2. Instale as dependências:
-   ```bash
-   pip install -r app/requirements.txt
-   ```
-3. Configure o arquivo `.env` com as variáveis do Supabase e segredos.
-4. Inicie a API:
-   ```bash
-   uvicorn app.main:app --reload
-   ```
-5. Acesse a documentação interativa:
-   - [http://localhost:8000/docs](http://localhost:8000/docs)
+- **FastAPI** - Framework web moderno e rápido
+- **Supabase** - Banco de dados PostgreSQL com autenticação
+- **Pandas** - Manipulação e análise de dados
+- **Python-Jose** - Autenticação JWT
+- **SlowAPI** - Rate limiting
+- **Cryptography** - Criptografia de dados
 
-### Frontend
-1. Acesse a pasta frontend:
-   ```bash
-   cd frontend
-   ```
-2. Instale as dependências:
-   ```bash
-   npm install
-   ```
-3. Inicie o servidor de desenvolvimento:
-   ```bash
-   npm run dev
-   ```
-4. Acesse a interface web:
-   - [http://localhost:3000](http://localhost:3000)
+### Frontend Principal
+- **Next.js 14** - Framework React com App Router
+- **TypeScript** - Tipagem estática
+- **Tailwind CSS** - Estilização utilitária
+- **React Hooks** - Gerenciamento de estado
+
+### Sistema de Monitoramento
+- **Next.js 14** - Dashboard de monitoramento
+- **TypeScript** - Tipagem estática
+- **Tailwind CSS** - Interface dark theme
+
+## 🚀 Como Executar
+
+### 1. Backend
+```bash
+cd backend
+pip install -r app/requirements.txt
+uvicorn app.main:app --reload
+```
+- **URL**: http://localhost:8000
+- **Docs**: http://localhost:8000/docs
+
+### 2. Frontend Principal
+```bash
+cd frontend
+npm install
+npm run dev
+```
+- **URL**: http://localhost:3000
+- **Interface**: Landing page, Dashboard, Upload
+
+### 3. Sistema de Monitoramento
+```bash
+cd monitoring-system/monitoring-dashboard
+npm install
+npm run dev
+```
+- **URL**: http://localhost:3001
+- **Interface**: Dashboard de monitoramento para desenvolvedores
+
+## 📊 Funcionalidades Principais
+
+### 🔐 Autenticação e Segurança
+- Autenticação JWT
+- Rate limiting por endpoint
+- Criptografia de dados sensíveis
+- Row Level Security (RLS) no Supabase
+
+### 📁 Upload e Processamento
+- Upload de arquivos CSV, Excel e JSON
+- Validação automática de dados
+- Processamento em background
+- Preview dos dados antes da análise
+
+### 🧠 Análise Inteligente
+- **Análise Descritiva**: Estatísticas básicas, distribuições
+- **Análise de Tendências**: Identificação de padrões temporais
+- **Análise de Risco**: Scoring automático de riscos
+- **Análise Geográfica**: Dados com coordenadas espaciais
+- **Processamento de Linguagem Natural**: Consultas em linguagem natural
+
+### 📊 Relatórios e Visualizações
+- Templates pré-configurados
+- Relatórios personalizáveis
+- Gráficos interativos
+- Exportação em Excel com formatação
+- Histórico de relatórios
+
+### 🔧 Sistema de Monitoramento
+- Métricas de performance em tempo real
+- Monitoramento de endpoints
+- Atividade de usuários
+- Histórico de métricas
+- Alertas automáticos
+
+## 📈 Tipos de Análises Disponíveis
+
+### 1. Análise Descritiva
+- Estatísticas básicas (média, mediana, desvio padrão)
+- Distribuições de frequência
+- Identificação de outliers
+- Correlações entre variáveis
+
+### 2. Análise de Tendências
+- Identificação de padrões temporais
+- Sazonalidade e ciclos
+- Previsões simples
+- Análise de crescimento
+
+### 3. Análise de Risco
+- Scoring automático de riscos
+- Identificação de anomalias
+- Alertas de segurança
+- Classificação de dados sensíveis
+
+### 4. Análise Geográfica
+- Visualização em mapas
+- Análise de clusters geográficos
+- Heatmaps de distribuição
+- Análise de proximidade
+
+### 5. Processamento de Linguagem Natural
+- Consultas em linguagem natural
+- Análise de sentimentos
+- Extração de entidades
+- Classificação automática de texto
+
+## 🔧 Sistema de Monitoramento
+
+O sistema de monitoramento é um projeto separado que oferece:
+
+### 📊 Visão Geral
+- Status geral do sistema (HEALTHY/WARNING/CRITICAL)
+- Métricas principais (saúde, performance, usuários, banco)
+- Métricas de negócio
+- Status das tabelas do banco
+
+### 🔗 Endpoints
+- Tabela detalhada de todos os endpoints
+- Requisições, tempo médio, erros, último acesso
+- Dados em tempo real dos endpoints mais utilizados
+
+### 👥 Usuários
+- Atividade detalhada dos usuários
+- Última atividade, requisições, uploads, análises
+- Duração das sessões
+
+### 📈 Histórico
+- Histórico de métricas ao longo do tempo
+- Últimas 10 entradas de métricas
+- Tendências e padrões de uso
+
+## 🗄️ Banco de Dados
+
+### Tabelas Principais
+- `reports` - Relatórios gerados
+- `templates` - Templates de relatórios
+- `user_settings` - Configurações dos usuários
+- `analyses` - Histórico de análises
+
+### Configuração
+```bash
+# Executar no Supabase SQL Editor
+\i database/setup_simple_tables.sql
+```
+
+## 🔒 Segurança
+
+- **Autenticação**: JWT tokens com expiração
+- **Rate Limiting**: Proteção contra spam
+- **Criptografia**: Dados sensíveis criptografados
+- **RLS**: Row Level Security no Supabase
+- **Validação**: Validação rigorosa de entrada
+
+## 📚 Documentação
+
+- [Guia de Configuração Completa](docs/GUIA_CONFIGURACAO_COMPLETA.md)
+- [Guia de Templates](docs/GUIA_TEMPLATES.md)
+- [Guia de Personalização](docs/GUIA_PERSONALIZACAO_TEMPLATES.md)
+- [Configuração do Supabase](docs/SUPABASE_SETUP.md)
+- [Sistema de Monitoramento](monitoring-system/README.md)
+
+## 🧪 Testes
+
+```bash
+# Testar endpoints
+cd backend
+python run_tests.py
+
+# Testar monitoramento
+cd backend
+python -m pytest tests/test_monitoring.py -v
+```
+
+## 🚀 Deploy
+
+### Backend
+```bash
+cd backend
+pip install -r app/requirements.txt
+uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+### Frontend Principal
+```bash
+cd frontend
+npm run build
+npm start
+```
+
+### Sistema de Monitoramento
+```bash
+cd monitoring-system/monitoring-dashboard
+npm run build
+npm start
+```
+
+## 📞 Suporte
+
+Para dúvidas ou problemas:
+1. Consulte a documentação em `/docs`
+2. Verifique os logs do sistema de monitoramento
+3. Teste os endpoints via Swagger UI (`/docs`)
+
+## 🔄 Atualizações
+
+O projeto está em desenvolvimento ativo. Para atualizações:
+1. Pull das mudanças
+2. Atualizar dependências
+3. Executar migrações do banco se necessário
+4. Reiniciar serviços
 
 ---
 
-## Contribuindo
-
-- Siga o padrão de commits atômicos e mensagens descritivas
-- Escreva testes para novas funcionalidades
-- Mantenha o código limpo, tipado e documentado
-- Sempre proteja endpoints críticos com autenticação e rate limiting
-- Documente endpoints e fluxos relevantes
-
----
-
-## Contato
-
-Dúvidas, sugestões ou problemas? Abra uma issue ou entre em contato com o time de desenvolvimento. 
+**AutoReport SaaS** - Transformando dados em insights com inteligência artificial 🚀 

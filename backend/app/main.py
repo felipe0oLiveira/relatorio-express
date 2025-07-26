@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routes import reports, auth, templates, users
+from app.routes import reports, auth, templates, users, analytics, backup
 from app.services.supabase_client import supabase
 from app.limiter import limiter, UPLOAD_LIMIT, REPORT_GENERATION_LIMIT, GENERAL_LIMIT, AUTH_LIMIT
 from fastapi.responses import JSONResponse
@@ -20,6 +20,8 @@ app.include_router(reports.router)
 app.include_router(auth.router)
 app.include_router(templates.router)
 app.include_router(users.router)
+app.include_router(analytics.router)
+app.include_router(backup.router)
 
 app.add_middleware(
     CORSMiddleware,

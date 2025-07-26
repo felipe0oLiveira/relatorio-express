@@ -5,8 +5,8 @@ import './globals.css'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'AutoReport SaaS',
-  description: 'Plataforma de relatórios automáticos com IA',
+  title: 'Monitoramento do Sistema - AutoReport SaaS',
+  description: 'Painel de controle para desenvolvedor',
 }
 
 export default function RootLayout({
