@@ -97,10 +97,12 @@ def list_reports(current_user: str = CurrentUser):
     try:
         print(f"🔍 Usuário autenticado: {current_user}")
         response = supabase.table("reports").select("*").eq("user_id", current_user).order("created_at", desc=True).execute()
+        print(f"📊 Relatórios encontrados: {len(response.data)}")
         return response.data
     except Exception as e:
         print(f"❌ Erro ao buscar relatórios: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        # Retornar lista vazia em caso de erro para evitar loop infinito
+        return []
 
 @router.get("/workspaces")
 def list_workspaces(current_user: str = CurrentUser):
@@ -117,7 +119,12 @@ def list_workspaces(current_user: str = CurrentUser):
             print(f"✅ Tabela uploaded_data existe e está acessível")
         except Exception as table_error:
             print(f"❌ Erro ao acessar tabela uploaded_data: {table_error}")
-            raise HTTPException(status_code=500, detail=f"Tabela uploaded_data não existe ou não está acessível: {str(table_error)}")
+            # Retornar dados vazios em vez de erro para evitar loop infinito
+            return {
+                "workspaces": [],
+                "count": 0,
+                "error": f"Tabela uploaded_data não existe ou não está acessível: {str(table_error)}"
+            }
         
         response = supabase.table("uploaded_data").select("*").eq("user_id", current_user).order("created_at", desc=True).execute()
         print(f"📊 Workspaces encontrados: {len(response.data)}")
@@ -128,7 +135,12 @@ def list_workspaces(current_user: str = CurrentUser):
         }
     except Exception as e:
         print(f"❌ Erro ao buscar workspaces: {e}")
-        raise HTTPException(status_code=500, detail=f"Erro ao buscar workspaces: {str(e)}")
+        # Retornar dados vazios em vez de erro para evitar loop infinito
+        return {
+            "workspaces": [],
+            "count": 0,
+            "error": f"Erro ao buscar workspaces: {str(e)}"
+        }
 
 @router.get("/reports/{report_id}", response_model=Report)
 def get_report(report_id: int, current_user: str = CurrentUser):

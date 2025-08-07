@@ -284,10 +284,14 @@ def get_usage_instructions(template_id: str) -> str:
 @router.get("/templates", response_model=List[Template])
 def list_templates(current_user: str = CurrentUser):
     try:
+        print(f"🔍 Buscando templates para usuário: {current_user}")
         response = supabase.table("templates").select("*").eq("user_id", current_user).order("created_at", desc=True).execute()
+        print(f"📊 Templates encontrados: {len(response.data)}")
         return response.data
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"❌ Erro ao buscar templates: {e}")
+        # Retornar lista vazia em caso de erro para evitar loop infinito
+        return []
 
 @router.get("/templates/{template_id}", response_model=Template)
 def get_template(template_id: int, current_user: str = CurrentUser):
