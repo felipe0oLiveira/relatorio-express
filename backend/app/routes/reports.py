@@ -96,16 +96,44 @@ async def analyze_columns(
 def list_reports(current_user: str = CurrentUser):
     try:
         print(f"🔍 Usuário autenticado: {current_user}")
-        response = supabase.table("reports").select("*").order("created_at", desc=True).execute()
+        response = supabase.table("reports").select("*").eq("user_id", current_user).order("created_at", desc=True).execute()
         return response.data
     except Exception as e:
         print(f"❌ Erro ao buscar relatórios: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.get("/workspaces")
+def list_workspaces(current_user: str = CurrentUser):
+    """
+    Lista todos os workspaces/projetos do usuário
+    """
+    try:
+        print(f"🔍 Buscando workspaces para usuário: {current_user}")
+        print(f"🔍 Verificando se a tabela uploaded_data existe...")
+        
+        # Primeiro, vamos verificar se a tabela existe
+        try:
+            test_response = supabase.table("uploaded_data").select("id").limit(1).execute()
+            print(f"✅ Tabela uploaded_data existe e está acessível")
+        except Exception as table_error:
+            print(f"❌ Erro ao acessar tabela uploaded_data: {table_error}")
+            raise HTTPException(status_code=500, detail=f"Tabela uploaded_data não existe ou não está acessível: {str(table_error)}")
+        
+        response = supabase.table("uploaded_data").select("*").eq("user_id", current_user).order("created_at", desc=True).execute()
+        print(f"📊 Workspaces encontrados: {len(response.data)}")
+        print(f"📋 Dados retornados: {response.data}")
+        return {
+            "workspaces": response.data,
+            "count": len(response.data)
+        }
+    except Exception as e:
+        print(f"❌ Erro ao buscar workspaces: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro ao buscar workspaces: {str(e)}")
+
 @router.get("/reports/{report_id}", response_model=Report)
 def get_report(report_id: int, current_user: str = CurrentUser):
     try:
-        response = supabase.table("reports").select("*").eq("id", report_id).single().execute()
+        response = supabase.table("reports").select("*").eq("id", report_id).eq("user_id", current_user).single().execute()
         return response.data
     except Exception as e:
         raise HTTPException(status_code=404, detail="Relatório não encontrado: " + str(e))
@@ -114,16 +142,29 @@ def get_report(report_id: int, current_user: str = CurrentUser):
 @limiter.limit("30/minute")
 async def upload_report_file(
     file: UploadFile = File(...),
+    workspace_name: str = Form("Espaço de trabalho - 1"),
+    description: str = Form(""),
+    file_type: str = Form("excel"),
+    data_location: str = Form("local"),
+    table_name: str = Form(None),
+    first_row_headers: bool = Form(True),
+    date_format: str = Form("dd MMM yyyy HH:mm:ss"),
+    error_handling: str = Form("empty"),
     max_rows: int = Query(None, description="Número máximo de linhas a retornar no preview. Se não informado, retorna tudo."),
     current_user: str = CurrentUser,
     request: Request = None,
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)
 ):
+    print(f"🚀 Upload iniciado - Usuário: {current_user}")
+    print(f"📁 Arquivo: {file.filename}")
+    print(f"🏷️ Workspace: {workspace_name}")
+    print(f"📝 Descrição: {description}")
     content = await file.read()
     if not file.filename:
         raise HTTPException(status_code=400, detail="Arquivo sem nome não suportado")
     if len(content) > MAX_FILE_SIZE:
         raise HTTPException(status_code=400, detail="Arquivo excede o tamanho máximo de 5MB")
+    
     try:
         # Criptografa o arquivo antes de processar
         encrypted_content = encrypt_file_bytes(content)
@@ -138,20 +179,128 @@ async def upload_report_file(
         df = df.where(pd.notnull(df), None)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Erro ao processar arquivo: {str(e)}")
-    if max_rows is not None:
-        preview = df.head(max_rows).to_dict(orient="records")
-    else:
-        preview = df.to_dict(orient="records")
-    return {
-        "columns": df.columns.tolist(),
-        "preview": preview
-    }
+    
+    # Salvar dados no banco
+    try:
+        print(f"🔍 Iniciando salvamento de dados para usuário: {current_user}")
+        
+        # Usar table_name se fornecido, senão usar o nome do arquivo
+        import re
+        final_table_name = table_name or re.sub(r'\.[^/.]+$', '', file.filename)
+        print(f"📝 Nome da tabela final: {final_table_name}")
+        
+        # Função para converter timestamps para strings ISO
+        def convert_timestamps(obj):
+            """Converte timestamps para strings ISO"""
+            import pandas as pd
+            from datetime import datetime
+            
+            if isinstance(obj, pd.Timestamp):
+                return obj.isoformat()
+            elif hasattr(obj, 'isoformat') and callable(getattr(obj, 'isoformat')):
+                return obj.isoformat()
+            elif isinstance(obj, datetime):
+                return obj.isoformat()
+            elif isinstance(obj, dict):
+                return {k: convert_timestamps(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [convert_timestamps(item) for item in obj]
+            else:
+                return obj
+        
+        # Converter dados para JSON serializable
+        try:
+            serializable_data = convert_timestamps(df.to_dict(orient="records"))
+            print(f"✅ Dados convertidos com sucesso - {len(serializable_data)} registros")
+        except Exception as convert_error:
+            print(f"❌ Erro ao converter dados: {convert_error}")
+            # Fallback: converter apenas os tipos básicos
+            import json
+            try:
+                # Tentar serializar e deserializar para forçar conversão
+                json_str = json.dumps(df.to_dict(orient="records"), default=str)
+                serializable_data = json.loads(json_str)
+                print(f"✅ Dados convertidos com fallback - {len(serializable_data)} registros")
+            except Exception as json_error:
+                print(f"❌ Erro no fallback: {json_error}")
+                raise HTTPException(status_code=500, detail=f"Erro ao processar dados: {str(json_error)}")
+        
+        # Preparar dados para salvar
+        data_to_save = {
+            'user_id': current_user,
+            'workspace_name': workspace_name,
+            'description': description,
+            'file_type': file_type,
+            'data_location': data_location,
+            'table_name': final_table_name,
+            'first_row_headers': first_row_headers,
+            'date_format': date_format,
+            'error_handling': error_handling,
+            'original_filename': file.filename,
+            'data': serializable_data,
+            'columns': df.columns.tolist(),
+            'row_count': len(df),
+            'created_at': datetime.utcnow().isoformat(),
+            'updated_at': datetime.utcnow().isoformat()
+        }
+        
+        print(f"📊 Dados preparados - Linhas: {len(df)}, Colunas: {len(df.columns)}")
+        
+        # Testar se os dados são serializáveis
+        import json
+        try:
+            json.dumps(serializable_data)
+            print(f"✅ Dados são serializáveis para JSON")
+        except Exception as json_test_error:
+            print(f"❌ Erro no teste de serialização: {json_test_error}")
+            raise HTTPException(status_code=500, detail=f"Dados não são serializáveis: {str(json_test_error)}")
+        
+        print(f"💾 Tentando salvar na tabela uploaded_data...")
+        
+        # Salvar na tabela uploaded_data
+        print(f"🔐 Tentando inserir dados com RLS...")
+        try:
+            response = supabase.table('uploaded_data').insert(data_to_save).execute()
+        except Exception as rls_error:
+            print(f"❌ Erro com RLS: {rls_error}")
+            print(f"🔄 Tentando inserir sem RLS...")
+            # Tentar inserir sem RLS (apenas para teste)
+            response = supabase.table('uploaded_data').insert(data_to_save).execute()
+        
+        print(f"✅ Resposta do Supabase: {response}")
+        
+        if not response.data:
+            print(f"❌ Erro: Nenhum dado retornado do Supabase")
+            raise HTTPException(status_code=500, detail="Erro ao salvar dados no banco")
+        
+        saved_data = response.data[0]
+        print(f"🎉 Dados salvos com sucesso! ID: {saved_data.get('id')}")
+        
+        # Preparar preview para retorno (usar dados serializados)
+        if max_rows is not None:
+            preview = convert_timestamps(df.head(max_rows).to_dict(orient="records"))
+        else:
+            preview = convert_timestamps(df.head(10).to_dict(orient="records"))  # Limitar a 10 linhas para preview
+        
+        return {
+            "id": saved_data['id'],
+            "workspace_name": saved_data['workspace_name'],
+            "table_name": saved_data['table_name'],
+            "columns": df.columns.tolist(),
+            "preview": preview,
+            "row_count": len(df),
+            "message": "Projeto criado com sucesso"
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao salvar projeto: {str(e)}")
 
 @router.post("/reports", response_model=Report)
 @limiter.limit("5/minute")
 def create_report(report: ReportCreate, current_user: str = CurrentUser, request: Request = None, credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)):
     try:
         data = report.dict()
+        data["user_id"] = current_user
         data["created_at"] = datetime.utcnow().isoformat()
         # Exemplo: criptografar campo sensível se existir
         if "token" in data:
@@ -167,7 +316,7 @@ def create_report(report: ReportCreate, current_user: str = CurrentUser, request
 @limiter.limit("5/minute")
 def delete_report(report_id: int, current_user: str = CurrentUser, request: Request = None, credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)):
     try:
-        response = supabase.table("reports").delete().eq("id", report_id).execute()
+        response = supabase.table("reports").delete().eq("id", report_id).eq("user_id", current_user).execute()
         return {"message": "Relatório deletado com sucesso"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
