@@ -283,6 +283,38 @@ async def google_auth(request: GoogleAuthRequest):
         print(f"❌ Exceção na autenticação Google: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Erro na autenticação Google: {str(e)}")
 
+@router.post("/auth/refresh")
+async def refresh_token(request: dict = Body(...)):
+    """
+    Endpoint para renovar o token de acesso usando o refresh token.
+    """
+    if not SUPABASE_URL or not SUPABASE_ANON_KEY:
+        raise HTTPException(status_code=500, detail="Supabase não configurado.")
+    
+    refresh_token = request.get("refresh_token")
+    if not refresh_token:
+        raise HTTPException(status_code=400, detail="Refresh token é obrigatório")
+    
+    url = f"{SUPABASE_URL}/auth/v1/token?grant_type=refresh_token"
+    headers = {
+        "apikey": SUPABASE_ANON_KEY,
+        "Content-Type": "application/json"
+    }
+    
+    data = {
+        "refresh_token": refresh_token
+    }
+    
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(url, headers=headers, json=data)
+        
+        if resp.status_code != 200:
+            error_detail = resp.json()
+            raise HTTPException(status_code=resp.status_code, detail=error_detail)
+        
+        result = resp.json()
+        return result
+
 @router.get("/auth/test")
 async def test_auth(current_user: str = CurrentUser):
     """
