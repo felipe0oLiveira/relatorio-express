@@ -7,6 +7,17 @@ import { ImageWithFallback } from "./ImageWithFallback";
 
 // Componente de animação 3D do relatório melhorado
 const Chart3DAnimation = () => {
+  // Valores fixos para evitar erro de hidratação
+  const barValues = [31, 56, 42]; // Valores fixos em vez de Math.random()
+  const particlePositions = [
+    { left: 20, top: 30 },
+    { left: 80, top: 60 },
+    { left: 40, top: 20 },
+    { left: 70, top: 80 },
+    { left: 10, top: 50 },
+    { left: 90, top: 40 }
+  ];
+
   return (
     <div className="relative w-40 h-28 mx-auto">
       {/* Container 3D do relatório */}
@@ -90,8 +101,8 @@ const Chart3DAnimation = () => {
                   width: '15%',
                   height: '0%'
                 }}
-                initial={{ height: "0%" }}
-                animate={{ height: `${30 + i * 20}%` }}
+                              initial={{ height: "0%" }}
+              animate={{ height: `${barValues[i]}%` }}
                 transition={{ 
                   duration: 1.2, 
                   delay: 1.5 + i * 0.3,
@@ -117,7 +128,7 @@ const Chart3DAnimation = () => {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 2.5 + i * 0.3 }}
                 >
-                  {Math.floor(Math.random() * 50) + 20}%
+                  {barValues[i]}%
                 </motion.div>
               </motion.div>
             ))}
@@ -165,17 +176,17 @@ const Chart3DAnimation = () => {
           </div>
 
           {/* Partículas de processamento */}
-          {[...Array(6)].map((_, i) => (
+          {particlePositions.map((pos, i) => (
             <motion.div
               key={i}
               className="absolute w-1 h-1 bg-yellow-400 rounded-full"
               style={{
-                left: `${Math.random() * 100}%`,
-                top: `${Math.random() * 100}%`
+                left: `${pos.left}%`,
+                top: `${pos.top}%`
               }}
               animate={{
                 y: [0, -15, 0],
-                x: [0, Math.random() * 8 - 4, 0],
+                x: [0, (i % 3 - 1) * 4, 0], // Movimento fixo baseado no índice
                 opacity: [0, 1, 0],
                 scale: [0, 1, 0]
               }}
