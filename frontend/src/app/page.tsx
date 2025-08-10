@@ -1,9 +1,15 @@
-import Link from "next/link";
+import Header from "../components/Header";
+import HeroSection from "../components/HeroSection";
+import FeaturesSection from "../components/FeaturesSection";
 
 export default function Home() {
   return (
-    <div>
-      {/* Seu conteúdo baseado no Figma será construído aqui */}
+    <div className="min-h-screen">
+      <Header />
+      <main>
+        <HeroSection />
+        <FeaturesSection />
+      </main>
     </div>
   );
 }
