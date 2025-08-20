@@ -21,6 +21,8 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  // Configuração para excluir páginas problemáticas
+  pageExtensions: ['tsx', 'ts'],
   // Configurações de segurança (removidas para export estático)
   // headers não funcionam com output: export
 };
