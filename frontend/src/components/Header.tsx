@@ -21,9 +21,7 @@ export default function Header() {
 
           {/* Desktop Buttons */}
           <div className="hidden md:flex items-center space-x-4">
-            <Link href="/login">
-              <Button variant="ghost" className="text-white hover:text-yellow-300">Entrar</Button>
-            </Link>
+            <Button variant="ghost" className="text-white hover:text-yellow-300">Entrar</Button>
           </div>
 
           {/* Mobile menu button */}
@@ -44,9 +42,7 @@ export default function Header() {
           <div className="md:hidden py-4 bg-slate-900/90 backdrop-blur-sm rounded-lg mt-2">
             <nav className="flex flex-col space-y-4">
               <div className="flex flex-col space-y-2 pt-4">
-                <Link href="/login">
-                  <Button variant="ghost" className="justify-start text-white hover:text-yellow-300 w-full">Entrar</Button>
-                </Link>
+                <Button variant="ghost" className="justify-start text-white hover:text-yellow-300 w-full">Entrar</Button>
               </div>
             </nav>
           </div>

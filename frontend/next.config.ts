@@ -1,30 +1,22 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Configurações otimizadas para landing page
-  output: 'export', // Para deploy estático
+  // Configuração mínima para landing page estática
+  output: 'export',
   trailingSlash: true,
   images: {
-    unoptimized: true, // Necessário para export estático
+    unoptimized: true,
   },
-  // Desabilitar funcionalidades que não são necessárias para landing page
-  experimental: {
-    // Manter apenas funcionalidades essenciais
-  },
-  // Configurações de performance
-  compress: true,
-  poweredByHeader: false,
-  // Configuração para ignorar erros de TypeScript no build
+  // Ignorar erros para permitir build
   typescript: {
     ignoreBuildErrors: true,
   },
   eslint: {
     ignoreDuringBuilds: true,
   },
-  // Configuração para excluir páginas problemáticas
-  pageExtensions: ['tsx', 'ts'],
-  // Configurações de segurança (removidas para export estático)
-  // headers não funcionam com output: export
+  // Remover configurações que podem causar conflito
+  // experimental: {},
+  // pageExtensions: ['tsx', 'ts'],
 };
 
 export default nextConfig;

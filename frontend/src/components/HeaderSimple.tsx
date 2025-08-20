@@ -19,11 +19,9 @@ export default function HeaderSimple() {
 
           {/* Desktop Buttons */}
           <div className="hidden md:flex items-center space-x-4">
-            <Link href="/login">
-              <button className="text-white hover:text-yellow-300 px-4 py-2 rounded-md text-sm font-medium transition-colors">
-                Entrar
-              </button>
-            </Link>
+            <button className="text-white hover:text-yellow-300 px-4 py-2 rounded-md text-sm font-medium transition-colors">
+              Entrar
+            </button>
           </div>
 
           {/* Mobile menu button */}
@@ -50,11 +48,9 @@ export default function HeaderSimple() {
           <div className="md:hidden py-4 bg-slate-900/90 backdrop-blur-sm rounded-lg mt-2">
             <nav className="flex flex-col space-y-4">
               <div className="flex flex-col space-y-2 pt-4">
-                <Link href="/login">
-                  <button className="justify-start text-white hover:text-yellow-300 w-full text-left px-4 py-2">
-                    Entrar
-                  </button>
-                </Link>
+                <button className="justify-start text-white hover:text-yellow-300 w-full text-left px-4 py-2">
+                  Entrar
+                </button>
               </div>
             </nav>
           </div>
